@@ -42,19 +42,21 @@ QIIME^TM^ 2的具体信息和流程可查看QIIME^TM^ 2的[官方文档](https:/
 
 在选择好参考数据库并下载之后，我们将得到两个文件，一个是`.fasta`的序列数据文件和一个内容是`taxonomy`的物种分类信息作为我们的参考物种注释。在以上都准备好之后我们开始训练物种分类器。
 
+#### 数据库导入
+
 后文讲分别用`seq.fasta`和`tax.txt`代替上述的序列文件和物种分类文件
 
 首先我们要导入参考序列和物种分类信息
 
 ```sh
-qiime tools import\
-	--type 'FeatureData[Sequence]'\
-	--input-path seq.fasta\
+qiime tools import \
+	--type 'FeatureData[Sequence]' \
+	--input-path seq.fasta \
 	--output-path seq.qza
 qiime tools import \
-  --type 'FeatureData[Taxonomy]'\
-  --input-format HeaderlessTSVTaxonomyFormat\
-  --input-path tax.txt\
+  --type 'FeatureData[Taxonomy]' \
+  --input-format HeaderlessTSVTaxonomyFormat \
+  --input-path tax.txt \
   --output-path tax.qza
 ```
 
@@ -126,17 +128,17 @@ make
 mkdir fq1
 mkdir fq2
 # 因为桥式PCR测序过程中双端序列方向不一定一致，因此需要颠倒两测序文件进行二次拆分
-/fastq-multx/fastq-multx\
-	-B metadata.txt\
-	-m 1\
-	-b *.R1.fastq *.R2.fastq\
-	-o fq1/%R1.fastq\
+/fastq-multx/fastq-multx \
+	-B metadata.txt \
+	-m 1 \
+	-b *R1.fastq *R2.fastq \
+	-o fq1/%R1.fastq \
 	-o fq1/%R2.fastq
-/fastq-multx/fastq-multx\
-	-B metadata.txt\
-	-m 1\
-	-b *.R2.fastq *.R1.fastq\
-	-o fq2/%.R1.fastq\
+/fastq-multx/fastq-multx \
+	-B metadata.txt \
+	-m 1 \
+	-b *.R2.fastq *.R1.fastq \
+	-o fq2/%.R1.fastq \
 	-o fq2/%.R2.fastq
 ```
 
@@ -186,9 +188,9 @@ awk 'NR==1{print "sample-id\tforward-absolute-filepath\treverse-absolute-filepat
 生成好文件之后我们进行数据导入，最终生成一个`.qza`文件
 
 ```shell
-qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]'\
-	--input-path manifest\
-	--output-path demux.qza\
+qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]' \
+	--input-path manifest \
+	--output-path demux.qza \
 	--input-format PairedEndFastqManifestPhred33V2
 ```
 
@@ -197,13 +199,13 @@ qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]'\
 DADA2主要功能是可以实现扩增子序列去除测序噪音、错误和嵌合体，并挑选扩增序列变体和特征表的生成
 
 ```shell
-time qiime dada2 denoise-paired\
---i-demultiplexed-seqs demux.qza\
---p-n-threads 0\
---p-trim-left-f 0 --p-trim-left-r 12\
---p-trunc-len-f 0 --p-trunc-len-r 0\
---o-table dada2-table.qza\
---o-representative-sequences dada2-rep-seqs.qza\
+time qiime dada2 denoise-paired \
+--i-demultiplexed-seqs demux.qza \
+--p-n-threads 0 \
+--p-trim-left-f 0 --p-trim-left-r 12 \
+--p-trunc-len-f 0 --p-trunc-len-r 0 \
+--o-table dada2-table.qza \
+--o-representative-sequences dada2-rep-seqs.qza \
 --o-denoising-stats denoising-stats.qza
 ```
 
@@ -230,9 +232,9 @@ time qiime dada2 denoise-paired\
 ```sh
 cp dada2-table.qza table.qza
 cp dada2-rep-seqs.qza rep-seqs.qza
-qiime feature-table summarize\
-	--i-table table.qza\
-	--o-visualization table.qzv\
+qiime feature-table summarize \
+	--i-table table.qza \
+	--o-visualization table.qzv \
 	--m-sample-metadata-file metadata.txt
 ```
 
@@ -247,11 +249,11 @@ qiime feature-table summarize\
 在这里我们选择使用无参聚类方法
 
 ```sh
-qiime vsearch cluster-features-de-novo\
-	--i-table table.qza\
-	--i-sequences rep-seqs.qza\
-	--p-perc-identity 0.97\
-	--o-clustered-table table-dn-97.qza\
+qiime vsearch cluster-features-de-novo \
+	--i-table table.qza \
+	--i-sequences rep-seqs.qza \
+	--p-perc-identity 0.97 \
+	--o-clustered-table table-dn-97.qza \
 	--o-clustered-sequences rep-seqs-dn-97.qza
 ```
 
@@ -267,12 +269,14 @@ qiime vsearch cluster-features-de-novo\
 
 ### 物种注释
 
+##### classify-sklearn
+
 在QIIME2中物种注释使用`feature-classifier classify-sklearn`功能，在之前已经训练好的数据库的训练文件进行注释，这里我们使用的是全长的物种数据库，同时根据不同实验室的不同引物也可以建立特异性的物种分类器。
 
 ```sh
-qiime feature-classifier classify-sklearn\
-	--i-classifier feature-classifier/silva-138-99-classifier.qza\
-	--i-reads rep-seqs-dn-97.qza\
+qiime feature-classifier classify-sklearn \
+	--i-classifier feature-classifier/silva-138-99-classifier.qza \
+	--i-reads rep-seqs-dn-97.qza \
 	--o-classification taxonomy.qza
 ```
 
@@ -282,12 +286,129 @@ qiime feature-classifier classify-sklearn\
 >
 > --o-classification输出注释结果
 
+##### classify-consensus-blast: BLAST+ consensus taxonomy classifier
+
+使用 BLAST+ 为查询序列指定分类标准。在查询序列和参考文献序列之间执行 BLAST+ 局部比对，然后从最大接受的命中序列中为每个查询序列分配共识分类学，其中最小的 共享该分类分配
+
+```bash
+time qiime feature-classifier classify-consensus-blast \
+	--i-query dada2-rep-seqs.qza \
+	--i-reference-taxonomy ref-taxonomy.qza \
+	--i-reference-reads 99_otus.qza \
+	--o-classification 16S_feature_tax \
+	--o-search-results 16S_feature_blast
+```
+
+
+
+```
+Usage: qiime feature-classifier classify-consensus-blast [OPTIONS]
+
+  Assign taxonomy to query sequences using BLAST+. Performs BLAST+ local
+  alignment between query and reference_reads, then assigns consensus taxonomy
+  to each query sequence from among maxaccepts hits, min_consensus of which
+  share that taxonomic assignment. Note that maxaccepts selects the first N
+  hits with > perc_identity similarity to query, not the top N matches. For
+  top N hits, use classify-consensus-vsearch.
+
+Inputs:
+  --i-query ARTIFACT FeatureData[Sequence]
+                          Query sequences.                          [required]
+  --i-reference-taxonomy ARTIFACT FeatureData[Taxonomy]
+                          reference taxonomy labels.                [required]
+  --i-blastdb ARTIFACT    BLAST indexed database. Incompatible with
+    BLASTDB               reference-reads.                          [optional]
+  --i-reference-reads ARTIFACT FeatureData[Sequence]
+                          Reference sequences. Incompatible with blastdb.
+                                                                    [optional]
+Parameters:
+  --p-maxaccepts INTEGER  Maximum number of hits to keep for each query.
+    Range(1, None)        BLAST will choose the first N hits in the reference
+                          database that exceed perc-identity similarity to
+                          query. NOTE: the database is not sorted by
+                          similarity to query, so these are the first N hits
+                          that pass the threshold, not necessarily the top N
+                          hits.                                  [default: 10]
+  --p-perc-identity PROPORTION Range(0.0, 1.0, inclusive_end=True)
+                          Reject match if percent identity to query is lower.
+                                                                [default: 0.8]
+  --p-query-cov PROPORTION Range(0.0, 1.0, inclusive_end=True)
+                          Reject match if query alignment coverage per
+                          high-scoring pair is lower. Note: this uses blastn's
+                          qcov_hsp_perc parameter, and may not behave
+                          identically to the query-cov parameter used by
+                          classify-consensus-vsearch.           [default: 0.8]
+  --p-strand TEXT Choices('both', 'plus', 'minus')
+                          Align against reference sequences in forward
+                          ("plus"), reverse ("minus"), or both directions
+                          ("both").                          [default: 'both']
+  --p-evalue NUMBER       BLAST expectation value (E) threshold for saving
+                          hits.                               [default: 0.001]
+  --p-output-no-hits / --p-no-output-no-hits
+                          Report both matching and non-matching queries.
+                          WARNING: always use the default setting for this
+                          option unless if you know what you are doing! If you
+                          set this option to False, your sequences and feature
+                          table will need to be filtered to exclude
+                          unclassified sequences, otherwise you may run into
+                          errors downstream from missing feature IDs. Set to
+                          FALSE to mirror default BLAST search.
+                                                               [default: True]
+  --p-min-consensus NUMBER Range(0.5, 1.0, inclusive_start=False,
+    inclusive_end=True)   Minimum fraction of assignments must match top hit
+                          to be accepted as consensus assignment.
+                                                               [default: 0.51]
+  --p-unassignable-label TEXT
+                          Annotation given to sequences without any hits.
+                                                       [default: 'Unassigned']
+  --p-num-threads INTEGER Number of threads (CPUs) to use in the BLAST
+    Range(1, None)        search.                                 [default: 1]
+Outputs:
+  --o-classification ARTIFACT FeatureData[Taxonomy]
+                          Taxonomy classifications of query sequences.
+                                                                    [required]
+  --o-search-results ARTIFACT
+    FeatureData[BLAST6]   Top hits for each query.                  [required]
+Miscellaneous:
+  --output-dir PATH       Output unspecified results to a directory
+  --verbose / --quiet     Display verbose output to stdout and/or stderr
+                          during execution of this action. Or silence output
+                          if execution is successful (silence is golden).
+  --recycle-pool TEXT     Use a cache pool for pipeline resumption. QIIME 2
+                          will cache your results in this pool for reuse by
+                          future invocations. These pool are retained until
+                          deleted by the user. If not provided, QIIME 2 will
+                          create a pool which is automatically reused by
+                          invocations of the same action and removed if the
+                          action is successful. Note: these pools are local to
+                          the cache you are using.
+  --no-recycle            Do not recycle results from a previous failed
+                          pipeline run or save the results from this run for
+                          future recycling.
+  --parallel              Execute your action in parallel. This flag will use
+                          your default parallel config.
+  --parallel-config FILE  Execute your action in parallel using a config at
+                          the indicated path.
+  --use-cache DIRECTORY   Specify the cache to be used for the intermediate
+                          work of this pipeline. If not provided, the default
+                          cache under $TMP/qiime2/ will be used.
+                          IMPORTANT FOR HPC USERS: If you are on an HPC system
+                          and are using parallel execution it is important to
+                          set this to a location that is globally accessible
+                          to all nodes in the cluster.
+  --example-data PATH     Write example data and exit.
+  --citations             Show citations and exit.
+  --help                  Show this message and exit.
+```
+
+
+
 下面进行可视化物种注释
 
 ```sh
 # 可视化物种注释
-qiime metadata tabulate\
-	--m-input-file taxonomy.qza\
+qiime metadata tabulate \
+	--m-input-file taxonomy.qza \
 	--o-visualization taxonomy.qzv
 ```
 
@@ -312,10 +433,10 @@ sed -i -e '1 s/Feature/#Feature/' -e '1 s/Taxon/taxonomy/' taxonomy/taxonomy.tsv
 然后我们就要把刚处理好的物种注释信息添加到特征表后
 
 ```sh
-biom add-metadata\
-	-i feature-table/fbc3e3b8-c529-49e4-bf51-8f3e97d7f4ef/data/feature-table.biom\
-	-o feature-table/fbc3e3b8-c529-49e4-bf51-8f3e97d7f4ef/data/feature-table_w_tax.biom\
-	--observation-metadata-fp taxonomy/taxonomy.tsv\
+biom add-metadata \
+	-i feature-table/fbc3e3b8-c529-49e4-bf51-8f3e97d7f4ef/data/feature-table.biom \
+	-o feature-table/fbc3e3b8-c529-49e4-bf51-8f3e97d7f4ef/data/feature-table_with_tax.biom \
+	--observation-metadata-fp taxonomy/taxonomy.tsv \
 	--sc-separated taxonomy
 ```
 
@@ -324,10 +445,10 @@ biom add-metadata\
 得到带有注释信息的特征表后，我们可以选择性的将它变为`.txt`格式
 
 ```sh
-biom convert\
-	-i feature-table/fbc3e3b8-c529-49e4-bf51-8f3e97d7f4ef/data/feature-table_w_tax.biom\
-	-o feature-table.txt\
-	--to-tsv\
+biom convert \
+	-i feature-table/fbc3e3b8-c529-49e4-bf51-8f3e97d7f4ef/data/feature-table_with_tax.biom \
+	-o feature-table.txt \
+	--to-tsv \
 	--header-key taxonomy
 ```
 
