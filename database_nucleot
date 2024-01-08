@@ -1,0 +1,18 @@
+crabs db_download --source ncbi --database nucleotide --query '16S[All Fields] AND ("1"[SLEN] : "50000"[SLEN])' --output 16S_ncbi_1_50000.fasta --keep_original yes --email fangliufree@gmail.com --batchsize 50000
+
+crabs insilico_pcr --input 18S_ncbi_1_50000.fasta --output 18S_cut.fasta --fwd TTTGTCTGSTTAATTSCG --rev CACAGACCTGTTATTGC  --error 1
+
+crabs pga --input 18S_ncbi_1_50000.fasta --output 18S_noPrimer.fasta --database 18S_cut.fasta --fwd TTTGTCTGSTTAATTSCG --rev CACAGACCTGTTATTGC --speed medium --percid 0.5 --coverage 0.5 --filter_method strict
+
+crabs assign_tax --input 18S_noPrimer.fasta --output 18S_assigned.tsv --acc2tax nucl_gb.accession2taxid --taxid nodes.dmp --name names.dmp --missing missing_taxa.tsv
+
+crabs dereplicate --input 18S_assigned.tsv --output 18S_assigned_uniq.tsv --method uniq_species
+
+crabs seq_cleanup --input 18S_assigned_uniq.tsv --output 18S_output.tsv --minlen 60 --maxlen 2000 --maxns 2 --enviro yes --species yes --nans 2
+
+crabs tax_format --input 18S_output.tsv --output 18S_vsearch_reference.fasta --format sintax
+
+Rscript blast_reference.R -i 18S_output.tsv -o 18S_blast_reference.fasta
+
+
+

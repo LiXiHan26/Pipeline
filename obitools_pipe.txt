@@ -1,0 +1,77 @@
+#organise seperated files, merge same lib, same dir files into one file
+cat A08_S2_L001_R1_001.fastq.gz A11_S3_L001_R1_001.fastq.gz A07_S1_L001_R1_001.fastq.gz > R1.fastq.gz
+
+cat A08_S2_L001_R2_001.fastq.gz A11_S3_L001_R2_001.fastq.gz A07_S1_L001_R2_001.fastq.gz > R2.fastq.gz
+
+#import my own file into obi system
+obi import R1.fastq.gz lib1/r1
+
+obi import R2.fastq.gz lib1/r2
+
+#import your detailed libr information into obi system
+obi import --ngsfilter plate_info_obitools.txt lib1/ngsfile
+
+
+
+#join the paired end reads
+obi alignpairedend -R lib1/r2 lib1/r1 lib1/aligned
+
+obi export --fastq-output lib1/aligned > lib1_aligned.fastq
+
+
+#check alignment scores
+obi stats -a score_norm lib1/aligned
+#mean_score_norm	count	total
+#         0.807421	15955096	15955096	
+#keep only sequences with a high overlap alignment score
+obi grep -p "sequence['score_norm'] > 0.8" lib1/aligned lib1/aligned_step1
+#Grepped 12446343 entries
+
+#Assign samples
+obi ngsfilter -t lib1/ngsfile -u lib1/aligned_unidentified lib1/aligned_step1 lib1/aligned_step2
+
+obi export --fasta-output lib1/aligned_step2 > lib1_demultipelized.fasta
+
+#Retain unique sequences
+obi uniq -m sample lib1/aligned_step2 lib1/aligned_step3
+
+obi export --fasta-output lib1/aligned_step3 > lib1_demultipelized_uniq.fasta
+
+#Remove junk from headers of each sequence
+obi annotate -k COUNT -k MERGED_sample lib1/aligned_step3 lib1/aligned_step4
+
+#Remove outsize seqs, and any sequences with a count of less than 10
+obi grep -p "len(sequence)>=129 and sequence['COUNT']>=10" lib1/aligned_step4 lib1/aligned_step5
+
+obi export --fasta-output lib1/aligned_step5 > lib1_demultipelized_uniq_long.fasta
+
+#Clean the sequences from PCR/sequencing errors
+obi clean -r 0.05 -H lib1/aligned_step5 lib1/aligned_step6
+
+#make a MOTU sample table
+obi export --tab-output lib1/aligned_step6 > lib1_results.tab
+obi export --fasta-output lib1/aligned_step6 > lib1_cleaned.fasta
+
+# run sintax
+vsearch --threads 4 --sintax lib1_cleaned.fasta --db vsearch_reference.fasta --sintax_cutoff 1 --tabbedout sintax-output-lib1.tsv
+
+
+# run BLAST 
+# make blast db (only need to do this step once)
+makeblastdb -in blast_reference.fasta -parse_seqids -dbtype nucl -blastdb_version 5
+
+# get better hits with smaller word size
+blastn -task blastn -num_threads 4 -evalue 100 -word_size 7 -max_target_seqs 500 -db blast_reference.fasta -outfmt "6 qseqid sseqid evalue length pident nident score bitscore" -out blast-lib1.out -query lib1_cleaned.fasta
+
+#join the header
+printf"qseqid\tsseqidLocal\tevalueLocal\tlengthLocal\tpidentLocal\tnidentLocal\tscoreLocal\tbitscoreLocal\n" > headers-lib1
+
+printf "Accession\tseqID\tkingdom\tphylum\tclass\torder\tfamily\tgenus\tspecies\tseqences\n" > headers-assign
+
+
+cat headers-lib1 blast-lib1.out > blast-result-lib1.tsv
+cat headers-assign assigned_uniq_clean.tsv > assigned_uniq_cleaned.tsv
+
+Rscript make-OTU.R --sintax sintax-output-lib1.tsv --blast blast-result-lib1.tsv --taxonomy assigned_uniq_cleaned.tsv --otus lib1_results.tab --output lib1_full_OTUs.csv
+
+
